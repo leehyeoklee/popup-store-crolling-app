@@ -25,11 +25,11 @@ function getPool() {
 async function testConnection() {
   try {
     const connection = await getPool().getConnection();
-    console.log('✅ MySQL 연결 성공!');
+    console.log('[OK] MySQL 연결 성공!');
     connection.release();
     return true;
   } catch (error) {
-    console.error('❌ MySQL 연결 실패:', error.message);
+    console.error('[ERROR] MySQL 연결 실패:', error.message);
     return false;
   }
 }

@@ -4,14 +4,14 @@ class PopupStoreRepository {
   // 크롤링 데이터 저장
   async savePopupStores(popupDataArray) {
     if (popupDataArray.length === 0) {
-      console.log('⚠️ 저장할 데이터가 없습니다.');
+      console.log('[WARN] 저장할 데이터가 없습니다.');
       return { savedCount: 0, skippedCount: 0, savedIds: [] };
     }
     
     const connection = await getPool().getConnection();
     
     try {
-      console.log(`\n🔍 중복 체크 시작... (총 ${popupDataArray.length}개)`);
+      console.log(`\n[CHECK] 중복 체크 시작... (총 ${popupDataArray.length}개)`);
       
       // 1. DB에서 현재 저장된 모든 팝업의 (name, address) 한번에 조회
       const [existing] = await connection.query(
@@ -38,12 +38,12 @@ class PopupStoreRepository {
       if (newData.length > 0) {
         savedIds = await this.batchInsertPopupStores(newData);
       } else {
-        console.log('⚠️ 모두 중복 데이터입니다. 저장할 항목이 없습니다.');
+        console.log('[WARN] 모두 중복 데이터입니다. 저장할 항목이 없습니다.');
       }
       
-      console.log(`\n📊 최종 저장 결과:`);
-      console.log(`  ✅ 새로 추가: ${newData.length}개`);
-      console.log(`  ⏭️  이미 존재: ${popupDataArray.length - newData.length}개`);
+      console.log(`\n[RESULT] 최종 저장 결과:`);
+      console.log(`  - 새로 추가: ${newData.length}개`);
+      console.log(`  - 이미 존재: ${popupDataArray.length - newData.length}개`);
       
       return { 
         savedCount: newData.length, 
@@ -109,12 +109,12 @@ class PopupStoreRepository {
       }
       
       await connection.commit();
-      console.log(`✅ 배치 저장 완료: ${popupDataArray.length}개 (이미지: ${allImageValues.length}개)`);
+      console.log(`[OK] 배치 저장 완료: ${popupDataArray.length}개 (이미지: ${allImageValues.length}개)`);
       return savedIds;
       
     } catch (error) {
       await connection.rollback();
-      console.error('❌ 배치 저장 실패:', error.message);
+      console.error('[ERROR] 배치 저장 실패:', error.message);
       throw error;
     } finally {
       connection.release();

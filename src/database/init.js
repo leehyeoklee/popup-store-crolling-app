@@ -11,7 +11,7 @@ async function createDatabase() {
   try {
     // popup_db 생성
     await connection.query('CREATE DATABASE IF NOT EXISTS popup_db');
-    console.log('✅ popup_db 데이터베이스 생성 완료!');
+    console.log('[OK] popup_db 데이터베이스 생성 완료!');
     
     // 사용
     await connection.query('USE popup_db');
@@ -28,9 +28,9 @@ async function createDatabase() {
       }
     }
     
-    console.log('✅ 테이블 생성 완료!');
+    console.log('[OK] 테이블 생성 완료!');
   } catch (error) {
-    console.error('❌ 에러:', error.message);
+    console.error('[ERROR] 에러:', error.message);
     if (error.code === 'ER_ACCESS_DENIED_ERROR') {
       console.log('\n비밀번호가 틀렸습니다. config/database.js의 password를 확인하세요.');
     }
