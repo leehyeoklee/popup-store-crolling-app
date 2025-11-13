@@ -3,20 +3,18 @@ const { chromium } = require('playwright');
 /**
  * 네이버 지도 팝업 스토어 크롤러 (순수 크롤링만)
  * @param {string} searchKeyword - 검색 키워드
- * @param {boolean} headless - 헤드리스 모드 여부
  * @returns {Promise<Array>} 크롤링된 팝업 데이터 배열
  */
-async function crawlNaverMapPopups(searchKeyword, headless = true) {
+async function crawlNaverMapPopups(searchKeyword) {
   const browser = await chromium.launch({ 
-    headless: headless,
-    args: headless ? [
+    args: [
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-software-rasterizer'
-    ] : []
+    ]
   });
   
   const context = await browser.newContext({

@@ -8,8 +8,7 @@ async function main() {
   // 환경 변수에서 로드
   const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
   const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
-  const SEARCH_KEYWORD = process.env.SEARCH_KEYWORD || '팝업스토어';
-  const HEADLESS = true; // headless 모드 고정
+  const SEARCH_KEYWORD = process.env.SEARCH_KEYWORD;
 
   // 필수 환경 변수 체크
   if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
@@ -25,7 +24,7 @@ async function main() {
   const popupStoreService = new PopupStoreService(NAVER_CLIENT_ID, NAVER_CLIENT_SECRET);
 
   try {
-    const result = await popupStoreService.collectAndSave(SEARCH_KEYWORD, HEADLESS);
+    const result = await popupStoreService.collectAndSave(SEARCH_KEYWORD);
     
     console.log('\n[RESULT] 최종 결과:');
     console.log(`  - 새로 저장: ${result.savedCount}개`);
