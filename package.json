@@ -1,0 +1,22 @@
+{
+  "name": "popup-store-crawling-app",
+  "version": "1.0.0",
+  "description": "Popup store information crawling application",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "crawling",
+    "popup-store",
+    "scraping"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "axios": "^1.6.0",
+    "mysql2": "^3.6.0"
+  }
+}
