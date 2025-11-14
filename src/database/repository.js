@@ -82,15 +82,22 @@ class PopupStoreRepository {
         0  // favorite_count
       ]);
       
-      const [result] = await connection.query(
+      await connection.query(
         `INSERT INTO popup_stores 
         (name, address, mapx, mapy, start_date, end_date, description, site_link, weekly_view_count, favorite_count)
-        VALUES ? RETURNING id`,
+        VALUES ?`,
         [popupValues]
       );
 
-      // result: [{id: ...}, {id: ...}, ...]
-      const savedIds = result.map(row => row.id);
+      // INSERT 후 name/address로 id SELECT
+      const whereClause = popupValues.map(() => '(name = ? AND address = ?)').join(' OR ');
+      const whereParams = popupValues.flatMap(v => [v[0], v[1]]);
+      const [rows] = await connection.query(
+        `SELECT id FROM popup_stores WHERE ${whereClause} ORDER BY id DESC LIMIT ${popupValues.length}`,
+        whereParams
+      );
+      // rows: [{id: ...}, ...]
+      const savedIds = rows.map(row => row.id);
 
       // 2. 이미지 배치 INSERT (모든 팝업의 이미지를 한번에)
       const allImageValues = [];

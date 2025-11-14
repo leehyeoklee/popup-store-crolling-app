@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { testConnection } = require('./database/connection');
 const PopupStoreService = require('./services/popupStoreService');
 
 /**
@@ -46,9 +47,10 @@ async function main() {
   }
 }
 
-// 직접 실행할 경우
-if (require.main === module) {
-  main();
-}
-
-module.exports = main;
+(async () => {
+  const ok = await testConnection();
+  if (!ok) {
+    await require('./database/init'); // DB/테이블 생성 완료까지 대기
+  }
+  await main(); // DB 준비 후 서비스 실행
+})();
