@@ -13,28 +13,24 @@ class PopupStoreService {
   /**
    * 팝업 스토어 데이터 수집 및 DB 저장
    * @param {string} searchKeyword - 검색 키워드
-   * @param {boolean} headless - 헤드리스 모드 여부
    * @returns {Promise<Object>} 저장 결과
    */
-  async collectAndSave(searchKeyword = '팝업스토어', headless = true) {
+  async collectAndSave(searchKeyword = '팝업스토어') {
     console.log(`\n[START] 데이터 수집 시작: "${searchKeyword}"`);
     
-    // 1. 크롤링 실행
-    const crawledData = await crawlNaverMapPopups(searchKeyword, headless);
-    
-    if (crawledData.length === 0) {
-      console.log('[WARN] 크롤링된 데이터가 없습니다.');
-      return { savedCount: 0, skippedCount: 0, savedIds: [] };
-    }
+    let totalSaved = 0;
+    let totalSkipped = 0;
 
-    console.log(`\n[API] 네이버 API로 좌표 정보 수집 중... (${crawledData.length}개)`);
-    
-    // 2. 네이버 API로 좌표 및 링크 정보 보강
-    const enrichedData = await Promise.all(
-      crawledData.map(async (data) => {
+    // 페이지별 데이터 처리 콜백
+    const onPageComplete = async (pageData) => {
+      console.log(`  [API] 네이버 API로 좌표 정보 수집 중... (${pageData.length}개)`);
+      
+      // 네이버 API로 좌표 및 링크 정보 보강
+      const enrichedData = [];
+      for (const data of pageData) {
         const placeInfo = await this.naverApi.getPlaceInfo(data.name);
         
-        return {
+        enrichedData.push({
           name: data.name,
           address: data.address,
           mapx: placeInfo?.mapx || 0,
@@ -44,17 +40,27 @@ class PopupStoreService {
           description: data.description,
           webSiteLink: placeInfo?.link || '',
           images: data.images
-        };
-      })
-    );
+        });
+        
+        // Rate Limit 방지를 위한 딜레이 (100ms)
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
 
-    console.log('[OK] 좌표 정보 수집 완료\n');
+      console.log('  [OK] 좌표 정보 수집 완료');
 
-    // 3. DB에 저장
-    const result = await popupStoreRepository.savePopupStores(enrichedData);
+      // DB에 저장
+      const result = await popupStoreRepository.savePopupStores(enrichedData);
+      totalSaved += result.savedCount;
+      totalSkipped += result.skippedCount;
+      
+      console.log(`  [OK] 저장 완료: 새로 저장 ${result.savedCount}개, 중복 제외 ${result.skippedCount}개\n`);
+    };
+    
+    // 크롤링 실행 (페이지별 콜백 전달)
+    const { totalCount, pageCount } = await crawlNaverMapPopups(searchKeyword, onPageComplete);
     
     console.log('\n[DONE] 데이터 수집 및 저장 완료!');
-    return result;
+    return { savedCount: totalSaved, skippedCount: totalSkipped };
   }
 }
 

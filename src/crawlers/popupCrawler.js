@@ -3,9 +3,10 @@ const { chromium } = require('playwright');
 /**
  * 네이버 지도 팝업 스토어 크롤러 (순수 크롤링만)
  * @param {string} searchKeyword - 검색 키워드
- * @returns {Promise<Array>} 크롤링된 팝업 데이터 배열
+ * @param {Function} onPageComplete - 페이지별 데이터 처리 콜백 (pageData) => Promise<void>
+ * @returns {Promise<Object>} { totalCount, pageCount }
  */
-async function crawlNaverMapPopups(searchKeyword) {
+async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
   const browser = await chromium.launch({ 
     args: [
       '--disable-blink-features=AutomationControlled',
@@ -23,10 +24,10 @@ async function crawlNaverMapPopups(searchKeyword) {
   });
   const page = await context.newPage();
   
-  // 리소스 차단으로 속도 최적화
+  // 리소스 차단으로 속도 최적화 (이미지는 URL 수집을 위해 허용)
   await page.route('**/*', (route) => {
     const resourceType = route.request().resourceType();
-    if (['image', 'font', 'stylesheet', 'media'].includes(resourceType)) {
+    if (['font', 'stylesheet', 'media'].includes(resourceType)) {
       route.abort();
     } else {
       route.continue();
@@ -36,17 +37,17 @@ async function crawlNaverMapPopups(searchKeyword) {
   try {
     await page.goto(`https://map.naver.com/p/search/${encodeURIComponent(searchKeyword)}`, {
       waitUntil: 'domcontentloaded',
-      timeout: 30000
+      timeout: 10000
     });
     
-    await page.waitForTimeout(1000);
     const iframe = page.frameLocator('#searchIframe');
     await iframe.locator('li.guugO').first().waitFor({ timeout: 30000 });
     
-    const popupData = [];
+    let totalCount = 0;
     let pageNum = 1;
 
     while (true) {
+      const pageData = [];
       console.log(`\n=== 페이지 ${pageNum} 크롤링 중 ===`);
       
       // 스크롤을 내려서 모든 아이템 로드
@@ -59,7 +60,7 @@ async function crawlNaverMapPopups(searchKeyword) {
         await scrollList.evaluate(el => {
           el.scrollTop = el.scrollHeight;
         }).catch(() => {});
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(500);
         
         currentCount = await iframe.locator('li.guugO').count();
         
@@ -79,6 +80,7 @@ async function crawlNaverMapPopups(searchKeyword) {
       const count = await listItems.count();
 
       for (let i = 0; i < count; i++) {
+        const itemStartTime = Date.now();
         const currentItem = listItems.nth(i);
         const link = currentItem.locator('span.QeVJ4');
 
@@ -92,7 +94,9 @@ async function crawlNaverMapPopups(searchKeyword) {
         let images = [];
 
         // 기간 정보 추출
-        const periodEl = await currentItem.locator('span.tTTdX time').first().textContent({ timeout: 3000 }).catch(() => null);
+        const t1 = Date.now();
+        const periodEl = await currentItem.locator('span.tTTdX time').first().textContent({ timeout: 10000 }).catch(() => null);
+        const time1 = Date.now() - t1;
         if (periodEl) {
           const period = periodEl.trim();
           let match = period.match(/(\d{2}\.\d{2}\.\d{2}\.)\s*~\s*(\d{2}\.\d{2}\.\d{2}\.)/);
@@ -115,31 +119,15 @@ async function crawlNaverMapPopups(searchKeyword) {
           }
         }
 
-        // 상세 페이지로 이동
-        await link.click({ timeout: 3000 }).catch(async () => {
-          await currentItem.locator('a').first().click({ timeout: 3000 }).catch(() => {});
-        });
-
-        await page.waitForTimeout(600);
-
-        const entryFrame = page.frameLocator('#entryIframe');
-        
-        // 주소와 설명 병렬 수집
-        const [addressText, descText] = await Promise.all([
-          entryFrame.locator('span.LDgIH').first().textContent({ timeout: 2000 }).catch(() => ''),
-          entryFrame.locator('div.RoqbX').first().textContent({ timeout: 2000 }).catch(() => '')
-        ]);
-        
-        address = addressText.trim();
-        const desc = descText.trim();
-        description = desc.length > 500 ? desc.substring(0, 500) + '...' : desc;
-
-        // 이미지 수집
+        // 이미지 수집 (검색 결과 목록에서)
+        const t2 = Date.now();
         try {
-          const imageElements = entryFrame.locator('img');
+          const imageElements = currentItem.locator('div.YYh8o img.K0PDV');
           const imageCount = await imageElements.count();
-          for (let j = 0; j < imageCount; j++) {
-            const imgSrc = await imageElements.nth(j).getAttribute('src').catch(() => null);
+          const maxImages = Math.min(imageCount, 5); // 최대 5개까지만
+          
+          for (let j = 0; j < maxImages; j++) {
+            const imgSrc = await imageElements.nth(j).getAttribute('src', { timeout: 500 }).catch(() => null);
             if (imgSrc && imgSrc.startsWith('http')) {
               images.push(imgSrc);
             }
@@ -147,8 +135,34 @@ async function crawlNaverMapPopups(searchKeyword) {
         } catch (error) {
           console.error('    이미지 수집 실패:', error.message);
         }
+        const time2 = Date.now() - t2;
 
-        popupData.push({
+        // 상세 페이지로 이동
+        const t3 = Date.now();
+        await link.click({ timeout: 10000 }).catch(async () => {
+          await currentItem.locator('a').first().click({ timeout: 10000 }).catch(() => {});
+        });
+        const time3 = Date.now() - t3;
+
+        // entryIframe이 나타날 때까지 대기
+        const t4 = Date.now();
+        const entryFrame = page.frameLocator('#entryIframe');
+        await entryFrame.locator('span.LDgIH, div.RoqbX').first().waitFor({ timeout: 5000 }).catch(() => {});
+        const time4 = Date.now() - t4;
+        
+        // 주소와 설명 병렬 수집
+        const t5 = Date.now();
+        const [addressText, descText] = await Promise.all([
+          entryFrame.locator('span.LDgIH').first().textContent({ timeout: 10000 }).catch(() => ''),
+          entryFrame.locator('div.RoqbX').first().textContent({ timeout: 10000 }).catch(() => '')
+        ]);
+        const time5 = Date.now() - t5;
+        
+        address = addressText.trim();
+        const desc = descText.trim();
+        description = desc.length > 500 ? desc.substring(0, 500) + '...' : desc;
+
+        pageData.push({
           name,
           address,
           startDate,
@@ -156,6 +170,16 @@ async function crawlNaverMapPopups(searchKeyword) {
           description,
           images
         });
+        
+        const totalTime = Date.now() - itemStartTime;
+        console.log(`    시간: 기간=${time1}ms | 이미지=${time2}ms (${images.length}개) | 클릭=${time3}ms | iframe=${time4}ms | 주소/설명=${time5}ms | 총=${totalTime}ms`);
+      }
+
+      // 페이지 데이터 처리 (콜백 호출)
+      if (pageData.length > 0 && onPageComplete) {
+        console.log(`\n[SAVE] 페이지 ${pageNum} 데이터 저장 중... (${pageData.length}개)`);
+        await onPageComplete(pageData);
+        totalCount += pageData.length;
       }
 
       // 다음 페이지 확인
@@ -168,12 +192,12 @@ async function crawlNaverMapPopups(searchKeyword) {
       
       console.log('  다음 페이지로 이동...');
       await nextButton.click();
-      await page.waitForTimeout(800);
+      await iframe.locator('li.guugO').first().waitFor({ timeout: 10000 }).catch(() => {});
       pageNum++;
     }
 
-    console.log(`\n[OK] 크롤링 완료: 총 ${popupData.length}개`);
-    return popupData;
+    console.log(`\n[OK] 크롤링 완료: 총 ${totalCount}개 (페이지: ${pageNum}개)`);
+    return { totalCount, pageCount: pageNum };
   } finally {
     await browser.close();
   }
