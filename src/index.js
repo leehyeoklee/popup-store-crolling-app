@@ -8,6 +8,7 @@ async function main() {
   // 환경 변수에서 로드
   const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
   const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   const SEARCH_KEYWORD = process.env.SEARCH_KEYWORD;
 
   // 필수 환경 변수 체크
@@ -20,8 +21,15 @@ async function main() {
   console.log('====================================');
   console.log('  팝업 스토어 데이터 수집 앱');
   console.log('====================================');
+  
+  if (OPENAI_API_KEY) {
+    console.log('[INFO] OpenAI API 키 감지 - 자동 카테고리 분류 활성화');
+  } else {
+    console.log('[INFO] OpenAI API 키 없음 - 모든 데이터는 "기타" 카테고리로 저장됩니다');
+  }
+  console.log('');
 
-  const popupStoreService = new PopupStoreService(NAVER_CLIENT_ID, NAVER_CLIENT_SECRET);
+  const popupStoreService = new PopupStoreService(NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, OPENAI_API_KEY);
 
   try {
     const result = await popupStoreService.collectAndSave(SEARCH_KEYWORD);

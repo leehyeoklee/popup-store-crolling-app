@@ -1,59 +1,64 @@
 const { getPool } = require('./connection');
 
 class PopupStoreRepository {
-  // 크롤링 데이터 저장
-  async savePopupStores(popupDataArray) {
+  // 카테고리 이름으로 ID 조회 (캐싱)
+  async getCategoryId(categoryName) {
+    if (!this.categoryCache) {
+      this.categoryCache = {};
+      const connection = await getPool().getConnection();
+      try {
+        const [rows] = await connection.query('SELECT id, name FROM categories');
+        rows.forEach(row => {
+          this.categoryCache[row.name] = row.id;
+        });
+      } finally {
+        connection.release();
+      }
+    }
+    return this.categoryCache[categoryName];
+  }
+
+
+  // 크롤링 직후 중복 체크 (새 데이터만 필터링)
+  async filterNewData(popupDataArray) {
     if (popupDataArray.length === 0) {
-      console.log('[WARN] 저장할 데이터가 없습니다.');
-      return { savedCount: 0, skippedCount: 0, savedIds: [] };
+      return [];
     }
     
     const connection = await getPool().getConnection();
     
     try {
-      console.log(`\n[CHECK] 중복 체크 시작... (총 ${popupDataArray.length}개)`);
-      
-      // 1. DB에서 현재 저장된 모든 팝업의 (name, address) 한번에 조회
+      // DB에서 현재 저장된 모든 팝업의 (name, address) 조회
       const [existing] = await connection.query(
         'SELECT name, address FROM popup_stores'
       );
       
-      console.log(`  - DB에 기존 데이터: ${existing.length}개`);
-      
-      // 2. Set으로 변환 (메모리에서 빠른 검색)
+      // Set으로 변환 (빠른 검색)
       const existingSet = new Set(
         existing.map(row => `${row.name}|${row.address}`)
       );
       
-      // 3. 새로운 데이터만 필터링
+      // 새로운 데이터만 필터링
       const newData = popupDataArray.filter(data => 
         !existingSet.has(`${data.name}|${data.address}`)
       );
       
-      console.log(`  - 새로 추가할 데이터: ${newData.length}개`);
-      console.log(`  - 중복 제외: ${popupDataArray.length - newData.length}개\n`);
-      
-      // 4. 새 데이터만 배치 저장
-      let savedIds = [];
-      if (newData.length > 0) {
-        savedIds = await this.batchInsertPopupStores(newData);
-      } else {
-        console.log('[WARN] 모두 중복 데이터입니다. 저장할 항목이 없습니다.');
-      }
-      
-      console.log(`\n[RESULT] 최종 저장 결과:`);
-      console.log(`  - 새로 추가: ${newData.length}개`);
-      console.log(`  - 이미 존재: ${popupDataArray.length - newData.length}개`);
-      
-      return { 
-        savedCount: newData.length, 
-        skippedCount: popupDataArray.length - newData.length,
-        savedIds 
-      };
+      return newData;
     } finally {
       connection.release();
     }
   }
+
+  // 중복 체크 없이 바로 저장 (이미 필터링된 데이터용)
+  async savePopupStoresWithoutCheck(popupDataArray) {
+    if (popupDataArray.length === 0) {
+      return { savedCount: 0, savedIds: [] };
+    }
+    
+    const savedIds = await this.batchInsertPopupStores(popupDataArray);
+    return { savedCount: popupDataArray.length, savedIds };
+  }
+  
 
   async batchInsertPopupStores(popupDataArray) {
     if (popupDataArray.length === 0) return [];
@@ -80,23 +85,35 @@ class PopupStoreRepository {
       const [result] = await connection.query(
         `INSERT INTO popup_stores 
         (name, address, mapx, mapy, start_date, end_date, description, site_link, weekly_view_count, favorite_count)
-        VALUES ?`,
+        VALUES ? RETURNING id`,
         [popupValues]
       );
-      
-      const firstInsertId = result.insertId;
-      const savedIds = [];
-      
+
+      // result: [{id: ...}, {id: ...}, ...]
+      const savedIds = result.map(row => row.id);
+
       // 2. 이미지 배치 INSERT (모든 팝업의 이미지를 한번에)
       const allImageValues = [];
-      
+      // 3. 카테고리 배치 INSERT
+      const allCategoryValues = [];
+
+      // 먼저 카테고리 캐시를 초기화
+      await this.getCategoryId('fashion'); // 캐시 로딩
       for (let i = 0; i < popupDataArray.length; i++) {
-        const popupId = firstInsertId + i;
-        savedIds.push(popupId);
-        
+        const popupId = savedIds[i];
+        // ...existing code...
         const images = popupDataArray[i].images || [];
         for (const imageUrl of images) {
           allImageValues.push([popupId, imageUrl]);
+        }
+
+        // 카테고리 데이터 수집
+        const categories = popupDataArray[i].categories || [];
+        for (const categoryName of categories) {
+          const categoryId = this.categoryCache[categoryName]; // 캐시에서 직접 읽기
+          if (categoryId) {
+            allCategoryValues.push([popupId, categoryId]);
+          }
         }
       }
       
@@ -108,8 +125,16 @@ class PopupStoreRepository {
         );
       }
       
+      // 카테고리가 있을 때만 INSERT
+      if (allCategoryValues.length > 0) {
+        await connection.query(
+          'INSERT IGNORE INTO popup_categories (popup_id, category_id) VALUES ?',
+          [allCategoryValues]
+        );
+      }
+      
       await connection.commit();
-      console.log(`[OK] 배치 저장 완료: ${popupDataArray.length}개 (이미지: ${allImageValues.length}개)`);
+      console.log(`[OK] 배치 저장 완료: ${popupDataArray.length}개 (이미지: ${allImageValues.length}개, 카테고리: ${allCategoryValues.length}개)`);
       return savedIds;
       
     } catch (error) {

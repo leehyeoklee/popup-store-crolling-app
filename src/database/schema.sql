@@ -44,15 +44,18 @@ CREATE TABLE IF NOT EXISTS popup_categories (
     INDEX idx_category_id (category_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 기본 카테고리 데이터
+-- 기본 카테고리 데이터 (실제 데이터 분석 기반)
 INSERT IGNORE INTO categories (name) VALUES 
-('패션'),
-('뷰티'),
-('식품'),
-('캐릭터'),
-('전시'),
-('아트'),
-('엔터테인먼트'),
-('스포츠'),
-('라이프스타일'),
-('기타');
+('fashion'),
+('beauty'),
+('food'),
+('character'),
+('exhibition'),
+('entertainment'),
+('lifestyle'),
+('theme_park'),
+('animation'),
+('tech'),
+('culture'),
+('sports'),
+('etc');

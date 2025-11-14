@@ -122,18 +122,22 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
         // 이미지 수집 (검색 결과 목록에서)
         const t2 = Date.now();
         try {
+          // 이미지 컨테이너가 보이도록 스크롤
+          await currentItem.scrollIntoViewIfNeeded().catch(() => {});
+          await page.waitForTimeout(300); // 이미지 로딩 대기
+          
           const imageElements = currentItem.locator('div.YYh8o img.K0PDV');
           const imageCount = await imageElements.count();
           const maxImages = Math.min(imageCount, 5); // 최대 5개까지만
           
           for (let j = 0; j < maxImages; j++) {
-            const imgSrc = await imageElements.nth(j).getAttribute('src', { timeout: 500 }).catch(() => null);
+            const imgSrc = await imageElements.nth(j).getAttribute('src', { timeout: 1000 }).catch(() => null);
             if (imgSrc && imgSrc.startsWith('http')) {
               images.push(imgSrc);
             }
           }
         } catch (error) {
-          console.error('    이미지 수집 실패:', error.message);
+          // 이미지 없어도 계속 진행
         }
         const time2 = Date.now() - t2;
 
