@@ -25,24 +25,36 @@ class PopupStoreRepository {
       return [];
     }
     
+
+    const { getPopupHash } = require('../utils/popupStoreHash');
     const connection = await getPool().getConnection();
     
     try {
-      // DB에서 현재 저장된 모든 팝업의 (name, address) 조회
+      // DB에서 현재 저장된 모든 팝업의 (name, hash) 조회
       const [existing] = await connection.query(
-        'SELECT name, address FROM popup_stores'
+        'SELECT name, hash FROM popup_stores'
       );
-      
       // Set으로 변환 (빠른 검색)
       const existingSet = new Set(
-        existing.map(row => `${row.name}|${row.address}`)
+        existing.map(row => `${row.name}|${row.hash}`)
       );
-      
-      // 새로운 데이터만 필터링
-      const newData = popupDataArray.filter(data => 
-        !existingSet.has(`${data.name}|${data.address}`)
-      );
-      
+
+      // 새로운 데이터만 필터링 (name+hash 기준)
+      const newData = popupDataArray.filter(data => {
+        const hash = getPopupHash(data);
+        const exists = existingSet.has(`${data.name}|${hash}`);
+        // 해시값 앞 4자리 비교 로그
+        if (!exists) {
+          console.log(`[HASH COMPARE] name: ${data.name}, hash: ${hash.slice(0,4)} (신규)`);
+        } else {
+          // 기존 해시값 찾기
+          const matched = Array.from(existingSet).find(v => v.startsWith(`${data.name}|`));
+          const oldHash = matched ? matched.split('|')[1] : '';
+          console.log(`[HASH COMPARE] name: ${data.name}, old: ${oldHash.slice(0,4)}, new: ${hash.slice(0,4)} (중복)`);
+        }
+        return !exists;
+      });
+
       return newData;
     } finally {
       connection.release();
@@ -68,7 +80,8 @@ class PopupStoreRepository {
     try {
       await connection.beginTransaction();
       
-      // 1. 팝업스토어 배치 INSERT
+      // 1. 팝업스토어 배치 INSERT (hash 포함)
+      const { getPopupHash } = require('../utils/popupStoreHash');
       const popupValues = popupDataArray.map(data => [
         data.name,
         data.address,
@@ -79,13 +92,26 @@ class PopupStoreRepository {
         data.description,
         data.webSiteLink,
         0, // weekly_view_count
-        0  // favorite_count
+        0, // favorite_count
+        getPopupHash(data) // hash
       ]);
-      
+
       await connection.query(
         `INSERT INTO popup_stores 
-        (name, address, mapx, mapy, start_date, end_date, description, site_link, weekly_view_count, favorite_count)
-        VALUES ?`,
+        (name, address, mapx, mapy, start_date, end_date, description, site_link, weekly_view_count, favorite_count, hash)
+        VALUES ?
+        ON DUPLICATE KEY UPDATE 
+          address=VALUES(address),
+          mapx=VALUES(mapx),
+          mapy=VALUES(mapy),
+          start_date=VALUES(start_date),
+          end_date=VALUES(end_date),
+          description=VALUES(description),
+          site_link=VALUES(site_link),
+          weekly_view_count=VALUES(weekly_view_count),
+          favorite_count=VALUES(favorite_count),
+          hash=VALUES(hash)
+        `,
         [popupValues]
       );
 

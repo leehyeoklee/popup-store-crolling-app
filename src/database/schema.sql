@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS popup_stores (
     site_link VARCHAR(500) COMMENT '사이트 링크',
     weekly_view_count INT DEFAULT 0 COMMENT '주간 뷰 수',
     favorite_count INT DEFAULT 0 COMMENT '즐겨찾기 수',
+    hash VARCHAR(64) COMMENT '팝업 데이터 해시값',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_name (name),
     INDEX idx_name (name),
     INDEX idx_favorite_count (favorite_count DESC),
     INDEX idx_weekly_view_count (weekly_view_count DESC)

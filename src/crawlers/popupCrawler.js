@@ -166,6 +166,31 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
         const desc = descText.trim();
         description = desc.length > 500 ? desc.substring(0, 500) + '...' : desc;
 
+        // 상세창 닫기: 실제 닫기 버튼을 class와 텍스트로 명확하게 선택
+        let closed = false;
+        try {
+          const closeBtn = entryFrame.locator('a.mKQJy:has(span.place_blind:text("페이지 닫기"))');
+          if (await closeBtn.count() > 0) {
+            await closeBtn.click({ timeout: 3000 });
+            closed = true;
+          }
+        } catch (e) {}
+        // 2. 뒤로가기 버튼 시도 (닫기 실패 시)
+        if (!closed) {
+          try {
+            const backBtn = entryFrame.getByRole('button', { name: /뒤로가기|Back/ });
+            if (await backBtn.count() > 0) {
+              await backBtn.click({ timeout: 3000 });
+              closed = true;
+            }
+          } catch (e) {}
+        }
+        // 3. 리스트 복구 대기
+        if (closed) {
+          await iframe.locator('li.guugO').first().waitFor({ timeout: 10000 }).catch(() => {});
+          await page.waitForTimeout(300);
+        }
+
         pageData.push({
           name,
           address,
