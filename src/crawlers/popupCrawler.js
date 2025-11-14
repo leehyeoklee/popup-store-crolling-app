@@ -156,10 +156,10 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
         
         // 주소와 설명 병렬 수집
         const t5 = Date.now();
-        const [addressText, descText] = await Promise.all([
-          entryFrame.locator('span.LDgIH').first().textContent({ timeout: 10000 }).catch(() => ''),
-          entryFrame.locator('div.RoqbX').first().textContent({ timeout: 10000 }).catch(() => '')
-        ]);
+        await page.waitForTimeout(300); // 주소/설명 수집 전 추가 대기 (0.3초)
+        const addressText = await entryFrame.locator('span.LDgIH').first().textContent({ timeout: 10000 }).catch(() => '');
+        await page.waitForTimeout(300); // 주소 수집 후 추가 대기 (0.3초)
+        const descText = await entryFrame.locator('div.RoqbX').first().textContent({ timeout: 10000 }).catch(() => '');
         const time5 = Date.now() - t5;
         
         address = addressText.trim();
