@@ -1,3 +1,13 @@
+-- 유저 테이블
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    userid VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100),
+    name VARCHAR(50),
+    nickname VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS popup_stores (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Popup ID (기본키)',
     name VARCHAR(255) NOT NULL COMMENT '이름',
@@ -44,6 +54,18 @@ CREATE TABLE IF NOT EXISTS popup_categories (
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
     INDEX idx_popup_id (popup_id),
     INDEX idx_category_id (category_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 유저-팝업 즐겨찾기 연결 테이블
+CREATE TABLE IF NOT EXISTS favorites (
+    user_id INT NOT NULL,
+    popup_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, popup_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (popup_id) REFERENCES popup_stores(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_popup_id (popup_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 기본 카테고리 데이터 (실제 데이터 분석 기반)
