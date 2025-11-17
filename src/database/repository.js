@@ -115,15 +115,16 @@ class PopupStoreRepository {
         [popupValues]
       );
 
-      // INSERT 후 name/address로 id SELECT
-      const whereClause = popupValues.map(() => '(name = ? AND address = ?)').join(' OR ');
-      const whereParams = popupValues.flatMap(v => [v[0], v[1]]);
-      const [rows] = await connection.query(
-        `SELECT id FROM popup_stores WHERE ${whereClause} ORDER BY id DESC LIMIT ${popupValues.length}`,
-        whereParams
-      );
-      // rows: [{id: ...}, ...]
-      const savedIds = rows.map(row => row.id);
+      // INSERT 후 name만으로 id SELECT
+      const savedIds = [];
+      for (const v of popupValues) {
+        const [rows] = await connection.query(
+          'SELECT id FROM popup_stores WHERE name = ? ORDER BY id DESC LIMIT 1',
+          [v[0]]
+        );
+        savedIds.push(rows[0] ? rows[0].id : null);
+      }
+      // savedIds는 위 for문에서 이미 선언 및 할당됨
 
       // 2. 이미지 배치 INSERT (모든 팝업의 이미지를 한번에)
       const allImageValues = [];

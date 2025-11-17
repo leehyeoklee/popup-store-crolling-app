@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS popup_stores (
     weekly_view_count INT DEFAULT 0 COMMENT '주간 뷰 수',
     favorite_count INT DEFAULT 0 COMMENT '즐겨찾기 수',
     hash VARCHAR(64) COMMENT '팝업 데이터 해시값',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_name (name),
     INDEX idx_name (name),
     INDEX idx_favorite_count (favorite_count DESC),
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS popup_images (
 CREATE TABLE IF NOT EXISTS categories (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Category ID (기본키)',
     name VARCHAR(100) NOT NULL UNIQUE COMMENT '카테고리명',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
