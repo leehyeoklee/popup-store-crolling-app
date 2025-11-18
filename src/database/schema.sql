@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     userid VARCHAR(50) NOT NULL UNIQUE,
-    email VARCHAR(100),
+    profile_image VARCHAR(500),
     name VARCHAR(50),
     nickname VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
