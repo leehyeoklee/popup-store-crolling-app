@@ -18,17 +18,20 @@ function formatDateToYYMMDD(date) {
   return `${yy}.${mm}.${dd}.`;
 }
 
+
 /**
- * 팝업스토어 주요 필드로 해시값 생성
- * @param {{ name: string, address: string, startDate: string|Date, endDate: string|Date }} data
+ * 팝업스토어 주요 필드 + 이미지로 해시값 생성
+ * @param {{ name: string, address: string, startDate: string|Date, endDate: string|Date, images?: string[] }} data
  * @returns {string} hash값
  */
 function getPopupHash(data) {
+  const images = Array.isArray(data.images) ? [...data.images].sort().join('|') : '';
   const hashInput = [
     data.name,
     data.address,
     formatDateToYYMMDD(data.startDate),
-    formatDateToYYMMDD(data.endDate)
+    formatDateToYYMMDD(data.endDate),
+    images
   ].join('|');
   return crypto.createHash('md5').update(hashInput).digest('hex');
 }
