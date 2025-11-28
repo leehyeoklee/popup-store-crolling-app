@@ -68,25 +68,6 @@ CREATE TABLE IF NOT EXISTS favorites (
     INDEX idx_popup_id (popup_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci; 
 
--- 팝업 제보 테이블
-CREATE TABLE IF NOT EXISTS reports (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL COMMENT '팝업 이름',
-    address VARCHAR(500) COMMENT '주소',
-    description TEXT COMMENT '제보 내용',
-    reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 리프레시 토큰 저장 테이블
-CREATE TABLE IF NOT EXISTS user_refresh_tokens (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  token VARCHAR(512) NOT NULL,
-  expires_at DATETIME NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- 기본 카테고리 데이터 (실제 데이터 분석 기반)
 INSERT IGNORE INTO categories (name) VALUES 
 ('fashion'),
@@ -102,3 +83,15 @@ INSERT IGNORE INTO categories (name) VALUES
 ('culture'),
 ('sports'),
 ('etc');
+
+CREATE TABLE reports (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,   -- 로그인 유저 FK
+    name VARCHAR(255) NOT NULL,
+    address VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT NOW(),
+    answer TEXT NULL,
+    answered_at DATETIME NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
