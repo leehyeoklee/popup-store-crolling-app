@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS popup_stores (
     weekly_view_count INT DEFAULT 0 COMMENT '주간 뷰 수',
     favorite_count INT DEFAULT 0 COMMENT '즐겨찾기 수',
     hash VARCHAR(64) COMMENT '팝업 데이터 해시값',
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_name (name),
     INDEX idx_name (name),
     INDEX idx_favorite_count (favorite_count DESC),

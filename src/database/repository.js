@@ -110,7 +110,8 @@ class PopupStoreRepository {
           site_link=VALUES(site_link),
           weekly_view_count=VALUES(weekly_view_count),
           favorite_count=VALUES(favorite_count),
-          hash=VALUES(hash)
+          hash=VALUES(hash),
+          updated_at=NOW()
         `,
         [popupValues]
       );
