@@ -52,7 +52,6 @@ class PopupStoreService {
           if (!Number.isFinite(lat)) lat = 0;
           if (!Number.isFinite(lon)) lon = 0;
         }
-        console.log(`[COORD] ${data.name}: lat=${lat}, lon=${lon}`);
         enrichedData.push({
           name: data.name,
           address: data.address,
