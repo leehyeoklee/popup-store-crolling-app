@@ -52,16 +52,22 @@ class PopupStoreService {
           if (!Number.isFinite(lat)) lat = 0;
           if (!Number.isFinite(lon)) lon = 0;
         }
+        // 필수 데이터 검증: 이름이 없거나 날짜가 비어있으면 건너뛰기
+        if (!data.name || (!data.startDate && !data.endDate)) {
+          console.warn(`[SKIP] 필수 데이터 누락: ${data.name || '(이름없음)'}`);
+          continue;
+        }
+        
         enrichedData.push({
           name: data.name,
-          address: data.address,
+          address: data.address || '',
           lat,
           lon,
           startDate: data.startDate,
           endDate: data.endDate,
-          description: data.description,
+          description: data.description || '',
           webSiteLink: placeInfo?.link || '',
-          images: data.images
+          images: data.images || []
         });
         // Rate Limit 방지를 위한 딜레이 (100ms)
         await new Promise(resolve => setTimeout(resolve, 100));
