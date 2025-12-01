@@ -85,8 +85,8 @@ class PopupStoreRepository {
       const popupValues = popupDataArray.map(data => [
         data.name,
         data.address,
-        data.mapx,
-        data.mapy,
+        data.lat,
+        data.lon,
         data.startDate,
         data.endDate,
         data.description,
@@ -98,12 +98,12 @@ class PopupStoreRepository {
 
       await connection.query(
         `INSERT INTO popup_stores 
-        (name, address, mapx, mapy, start_date, end_date, description, site_link, weekly_view_count, favorite_count, hash)
+        (name, address, lat, lon, start_date, end_date, description, site_link, weekly_view_count, favorite_count, hash)
         VALUES ?
         ON DUPLICATE KEY UPDATE 
           address=VALUES(address),
-          mapx=VALUES(mapx),
-          mapy=VALUES(mapy),
+          lat=VALUES(lat),
+          lon=VALUES(lon),
           start_date=VALUES(start_date),
           end_date=VALUES(end_date),
           description=VALUES(description),

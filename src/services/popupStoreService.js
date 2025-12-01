@@ -42,19 +42,28 @@ class PopupStoreService {
       const enrichedData = [];
       for (const data of newData) {
         const placeInfo = await this.naverApi.getPlaceInfo(data.name);
-        
+        // 네이버 API의 mapx, mapy는 이미 WGS84 좌표계 (경도, 위도)
+        // 1,000,000으로 나누면 실제 좌표값이 됨
+        let lon = 0, lat = 0;
+        if (placeInfo?.mapx && placeInfo?.mapy) {
+          lon = Number(placeInfo.mapx) / 10000000;
+          lat = Number(placeInfo.mapy) / 10000000;
+          // Infinity/NaN 방지
+          if (!Number.isFinite(lat)) lat = 0;
+          if (!Number.isFinite(lon)) lon = 0;
+        }
+        console.log(`[COORD] ${data.name}: lat=${lat}, lon=${lon}`);
         enrichedData.push({
           name: data.name,
           address: data.address,
-          mapx: placeInfo?.mapx || 0,
-          mapy: placeInfo?.mapy || 0,
+          lat,
+          lon,
           startDate: data.startDate,
           endDate: data.endDate,
           description: data.description,
           webSiteLink: placeInfo?.link || '',
           images: data.images
         });
-        
         // Rate Limit 방지를 위한 딜레이 (100ms)
         await new Promise(resolve => setTimeout(resolve, 100));
       }
