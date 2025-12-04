@@ -3,18 +3,18 @@ const mysql = require('mysql2/promise');
 async function createDatabase() {
   // DB 없이 연결 (DB 생성용)
   const connection = await mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '1q2w3e4r!'  // database.js와 동일한 비밀번호
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD
   });
 
   try {
     // popup_db 생성
-    await connection.query('CREATE DATABASE IF NOT EXISTS popup_db');
-    console.log('[OK] popup_db 데이터베이스 생성 완료!');
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'popup_db'}`);
+    console.log(`[OK] ${process.env.DB_NAME || 'popup_db'} 데이터베이스 생성 완료!`);
     
     // 사용
-    await connection.query('USE popup_db');
+    await connection.query(`USE ${process.env.DB_NAME || 'popup_db'}`);
     
     // schema.sql 실행
     const fs = require('fs');
