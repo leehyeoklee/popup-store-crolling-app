@@ -24,6 +24,11 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
   });
   const page = await context.newPage();
   
+  // 브라우저 연결 상태 추적
+  let browserClosed = false;
+  page.on('close', () => { browserClosed = true; });
+  context.on('close', () => { browserClosed = true; });
+  
   // 리소스 차단으로 속도 최적화 (이미지는 URL 수집을 위해 허용)
   await page.route('**/*', (route) => {
     const resourceType = route.request().resourceType();
@@ -79,7 +84,22 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
       const listItems = iframe.locator('li.guugO');
       const count = await listItems.count();
 
+      let consecutiveFailures = 0; // 연속 실패 카운터
+      const MAX_CONSECUTIVE_FAILURES = 5; // 최대 연속 실패 허용 횟수
+
       for (let i = 0; i < count; i++) {
+        // 브라우저가 닫혔으면 즉시 중단
+        if (browserClosed) {
+          console.log(`\n[ERROR] 브라우저가 닫혔습니다. 크롤링을 중단합니다.`);
+          break;
+        }
+
+        // 5개 연속 실패 시 다음 페이지로
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          console.log(`\n[WARN] ${MAX_CONSECUTIVE_FAILURES}개 연속 실패 - 다음 페이지로 이동합니다.`);
+          break;
+        }
+
         const itemStartTime = Date.now();
         const currentItem = listItems.nth(i);
         const link = currentItem.locator('span.QeVJ4');
@@ -87,121 +107,163 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
         const name = await link.innerText().catch(() => `item_${i}`);
         console.log(`  [${i + 1}/${count}] ${name}`);
         
-        let address = '';
-        let startDate = '';
-        let endDate = '';
-        let description = '';
-        let images = [];
+        // 전체 아이템 처리에 타임아웃 적용 (30초)
+        const ITEM_TIMEOUT = 30000;
+        const itemProcessingPromise = (async () => {
+          let address = '';
+          let startDate = '';
+          let endDate = '';
+          let description = '';
+          let images = [];
 
-        // 기간 정보 추출
-        const t1 = Date.now();
-        const periodEl = await currentItem.locator('span.tTTdX time').first().textContent({ timeout: 10000 }).catch(() => null);
-        const time1 = Date.now() - t1;
-        if (periodEl) {
-          const period = periodEl.trim();
-          let match = period.match(/(\d{2}\.\d{2}\.\d{2}\.)\s*~\s*(\d{2}\.\d{2}\.\d{2}\.)/);
-          
-          if (!match) {
-            match = period.match(/(\d{2}\.\d{2}\.\d{2}\.)\s*~\s*(\d{2}\.\d{2}\.)/);
-            if (match) {
-              startDate = match[1].trim();
-              endDate = match[1].substring(0, 3) + match[2].trim();
-            } else {
-              match = period.match(/(\d{2}\.\d{2}\.\d{2}\.)/);
+          // 기간 정보 추출
+          const t1 = Date.now();
+          const periodEl = await currentItem.locator('span.tTTdX time').first().textContent({ timeout: 10000 }).catch(() => null);
+          const time1 = Date.now() - t1;
+          if (periodEl) {
+            const period = periodEl.trim();
+            let match = period.match(/(\d{2}\.\d{2}\.\d{2}\.)\s*~\s*(\d{2}\.\d{2}\.\d{2}\.)/);
+            
+            if (!match) {
+              match = period.match(/(\d{2}\.\d{2}\.\d{2}\.)\s*~\s*(\d{2}\.\d{2}\.)/);
               if (match) {
                 startDate = match[1].trim();
-                endDate = null; // 종료일 미정
+                endDate = match[1].substring(0, 3) + match[2].trim();
+              } else {
+                match = period.match(/(\d{2}\.\d{2}\.\d{2}\.)/);
+                if (match) {
+                  startDate = match[1].trim();
+                  endDate = null; // 종료일 미정
+                }
+              }
+            } else {
+              startDate = match[1].trim();
+              endDate = match[2].trim();
+            }
+          }
+
+          // 이미지 수집 (검색 결과 목록에서)
+          const t2 = Date.now();
+          try {
+            // 이미지 컨테이너가 보이도록 스크롤
+            await currentItem.scrollIntoViewIfNeeded().catch(() => {});
+            await page.waitForTimeout(300); // 이미지 로딩 대기
+            
+            const imageElements = currentItem.locator('div.YYh8o img.K0PDV');
+            const imageCount = await imageElements.count();
+            const maxImages = Math.min(imageCount, 1);
+            
+            for (let j = 0; j < maxImages; j++) {
+              const imgSrc = await imageElements.nth(j).getAttribute('src', { timeout: 1000 }).catch(() => null);
+              if (imgSrc && imgSrc.startsWith('http')) {
+                images.push(imgSrc);
               }
             }
-          } else {
-            startDate = match[1].trim();
-            endDate = match[2].trim();
+          } catch (error) {
+            // 이미지 없어도 계속 진행
           }
-        }
+          const time2 = Date.now() - t2;
 
-        // 이미지 수집 (검색 결과 목록에서)
-        const t2 = Date.now();
-        try {
-          // 이미지 컨테이너가 보이도록 스크롤
-          await currentItem.scrollIntoViewIfNeeded().catch(() => {});
-          await page.waitForTimeout(300); // 이미지 로딩 대기
+          // 상세 페이지로 이동
+          const t3 = Date.now();
+          await link.click({ timeout: 10000 }).catch(async () => {
+            await currentItem.locator('a').first().click({ timeout: 10000 }).catch(() => {});
+          });
+          const time3 = Date.now() - t3;
+
+          // entryIframe이 나타날 때까지 대기
+          const t4 = Date.now();
+          const entryFrame = page.frameLocator('#entryIframe');
+          const time4 = Date.now() - t4;
           
-          const imageElements = currentItem.locator('div.YYh8o img.K0PDV');
-          const imageCount = await imageElements.count();
-          const maxImages = Math.min(imageCount, 5); // 최대 5개까지만
+          // 주소와 설명 병렬 수집 (타임아웃 추가)
+          const t5 = Date.now();
+          let addressText = '';
+          let descText = '';
           
-          for (let j = 0; j < maxImages; j++) {
-            const imgSrc = await imageElements.nth(j).getAttribute('src', { timeout: 1000 }).catch(() => null);
-            if (imgSrc && imgSrc.startsWith('http')) {
-              images.push(imgSrc);
-            }
-          }
-        } catch (error) {
-          // 이미지 없어도 계속 진행
-        }
-        const time2 = Date.now() - t2;
-
-        // 상세 페이지로 이동
-        const t3 = Date.now();
-        await link.click({ timeout: 10000 }).catch(async () => {
-          await currentItem.locator('a').first().click({ timeout: 10000 }).catch(() => {});
-        });
-        const time3 = Date.now() - t3;
-
-        // entryIframe이 나타날 때까지 대기
-        const t4 = Date.now();
-        const entryFrame = page.frameLocator('#entryIframe');
-        await entryFrame.locator('span.LDgIH, div.RoqbX').first().waitFor({ timeout: 5000 }).catch(() => {});
-        const time4 = Date.now() - t4;
-        
-        // 주소와 설명 병렬 수집
-        const t5 = Date.now();
-        await page.waitForTimeout(300); // 주소/설명 수집 전 추가 대기 (0.3초)
-        const addressText = await entryFrame.locator('span.LDgIH').first().textContent({ timeout: 10000 }).catch(() => '');
-        await page.waitForTimeout(300); // 주소 수집 후 추가 대기 (0.3초)
-        const descText = await entryFrame.locator('div.RoqbX').first().textContent({ timeout: 10000 }).catch(() => '');
-        const time5 = Date.now() - t5;
-        
-        address = addressText.trim();
-        const desc = descText.trim();
-        description = desc.length > 500 ? desc.substring(0, 500) + '...' : desc;
-
-        // 상세창 닫기: 실제 닫기 버튼을 class와 텍스트로 명확하게 선택
-        let closed = false;
-        try {
-          const closeBtn = entryFrame.locator('a.mKQJy:has(span.place_blind:text("페이지 닫기"))');
-          if (await closeBtn.count() > 0) {
-            await closeBtn.click({ timeout: 3000 });
-            closed = true;
-          }
-        } catch (e) {}
-        // 2. 뒤로가기 버튼 시도 (닫기 실패 시)
-        if (!closed) {
           try {
-            const backBtn = entryFrame.getByRole('button', { name: /뒤로가기|Back/ });
-            if (await backBtn.count() > 0) {
-              await backBtn.click({ timeout: 3000 });
+            await page.waitForTimeout(300);
+            addressText = await entryFrame.locator('span.LDgIH').first().textContent({ timeout: 10000 }).catch(() => '');
+            await page.waitForTimeout(300);
+            descText = await entryFrame.locator('div.RoqbX').first().textContent({ timeout: 10000 }).catch(() => '');
+          } catch (error) {
+            console.log(`    [WARN] 주소/설명 수집 실패: ${error.message}`);
+          }
+          const time5 = Date.now() - t5;
+          
+          address = addressText.trim();
+          const desc = descText.trim();
+          description = desc.length > 500 ? desc.substring(0, 500) + '...' : desc;
+
+          // 상세창 닫기: 실제 닫기 버튼을 class와 텍스트로 명확하게 선택
+          let closed = false;
+          try {
+            const closeBtn = entryFrame.locator('a.mKQJy:has(span.place_blind:text("페이지 닫기"))');
+            if (await closeBtn.count() > 0) {
+              await closeBtn.click({ timeout: 3000 });
               closed = true;
             }
           } catch (e) {}
-        }
-        // 3. 리스트 복구 대기
-        if (closed) {
-          await iframe.locator('li.guugO').first().waitFor({ timeout: 10000 }).catch(() => {});
-          await page.waitForTimeout(300);
-        }
+          // 2. 뒤로가기 버튼 시도 (닫기 실패 시)
+          if (!closed) {
+            try {
+              const backBtn = entryFrame.getByRole('button', { name: /뒤로가기|Back/ });
+              if (await backBtn.count() > 0) {
+                await backBtn.click({ timeout: 3000 });
+                closed = true;
+              }
+            } catch (e) {}
+          }
+          // 3. 리스트 복구 대기
+          if (closed) {
+            await iframe.locator('li.guugO').first().waitFor({ timeout: 10000 }).catch(() => {});
+            await page.waitForTimeout(300);
+          }
 
-        pageData.push({
-          name,
-          address,
-          startDate,
-          endDate,
-          description,
-          images
+          return { address, startDate, endDate, description, images, time1, time2, time3, time4, time5 };
+        })();
+
+        // 타임아웃과 Promise 경쟁
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('TIMEOUT')), ITEM_TIMEOUT);
         });
-        
-        const totalTime = Date.now() - itemStartTime;
-        console.log(`    시간: 기간=${time1}ms | 이미지=${time2}ms (${images.length}개) | 클릭=${time3}ms | iframe=${time4}ms | 주소/설명=${time5}ms | 총=${totalTime}ms`);
+
+        let itemData = null;
+        try {
+          itemData = await Promise.race([itemProcessingPromise, timeoutPromise]);
+          
+          pageData.push({
+            name,
+            address: itemData.address,
+            startDate: itemData.startDate,
+            endDate: itemData.endDate,
+            description: itemData.description,
+            images: itemData.images
+          });
+          
+          consecutiveFailures = 0; // 성공 시 카운터 리셋
+          
+          const totalTime = Date.now() - itemStartTime;
+          console.log(`    시간: 기간=${itemData.time1}ms | 이미지=${itemData.time2}ms (${itemData.images.length}개) | 클릭=${itemData.time3}ms | iframe=${itemData.time4}ms | 주소/설명=${itemData.time5}ms | 총=${totalTime}ms`);
+        } catch (error) {
+          consecutiveFailures++; // 실패 시 카운터 증가
+          
+          const totalTime = Date.now() - itemStartTime;
+          if (error.message === 'TIMEOUT') {
+            console.log(`    [SKIP] 타임아웃 (${ITEM_TIMEOUT / 1000}초 초과) - 다음 항목으로 이동 (연속실패: ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}) (총=${totalTime}ms)`);
+          } else {
+            console.log(`    [SKIP] 오류 발생: ${error.message} (연속실패: ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}) (총=${totalTime}ms)`);
+            
+            // 브라우저 닫힘 관련 에러면 즉시 중단
+            if (error.message.includes('closed') || error.message.includes('Target page')) {
+              browserClosed = true;
+              console.log(`\n[ERROR] 브라우저 연결이 끊어졌습니다. 크롤링을 중단합니다.`);
+              break;
+            }
+          }
+          // 타임아웃 또는 오류 발생 시 다음 항목으로 계속
+          continue;
+        }
       }
 
       // 페이지 데이터 처리 (콜백 호출)
