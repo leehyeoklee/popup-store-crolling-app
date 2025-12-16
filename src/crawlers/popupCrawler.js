@@ -4,9 +4,10 @@ const { chromium } = require('playwright');
  * 네이버 지도 팝업 스토어 크롤러 (순수 크롤링만)
  * @param {string} searchKeyword - 검색 키워드
  * @param {Function} onPageComplete - 페이지별 데이터 처리 콜백 (pageData) => Promise<void>
+ * @param {Logger} logger - 로그 기록용 인스턴스
  * @returns {Promise<Object>} { totalCount, pageCount }
  */
-async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
+async function crawlNaverMapPopups(searchKeyword, onPageComplete, logger) {
   const browser = await chromium.launch({ 
     args: [
       '--disable-blink-features=AutomationControlled',
@@ -53,7 +54,7 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
 
     while (true) {
       const pageData = [];
-      console.log(`\n=== 페이지 ${pageNum} 크롤링 중 ===`);
+      logger.log(`\n=== 페이지 ${pageNum} 크롤링 중 ===`);
       
       // 스크롤을 내려서 모든 아이템 로드
       const scrollList = iframe.locator('div.Ryr1F');
@@ -72,7 +73,7 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
         if (currentCount === previousCount) {
           stableCount++;
           if (stableCount >= 2) {
-            console.log(`  ${currentCount}개 아이템 로드 완료`);
+            logger.log(`  ${currentCount}개 아이템 로드 완료`);
             break;
           }
         } else {
@@ -90,13 +91,13 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
       for (let i = 0; i < count; i++) {
         // 브라우저가 닫혔으면 즉시 중단
         if (browserClosed) {
-          console.log(`\n[ERROR] 브라우저가 닫혔습니다. 크롤링을 중단합니다.`);
+          logger.error(`\n[ERROR] 브라우저가 닫혔습니다. 크롤링을 중단합니다.`);
           break;
         }
 
         // 5개 연속 실패 시 다음 페이지로
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          console.log(`\n[WARN] ${MAX_CONSECUTIVE_FAILURES}개 연속 실패 - 다음 페이지로 이동합니다.`);
+          logger.warn(`\n[WARN] ${MAX_CONSECUTIVE_FAILURES}개 연속 실패 - 다음 페이지로 이동합니다.`);
           break;
         }
 
@@ -105,7 +106,9 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
         const link = currentItem.locator('span.QeVJ4');
 
         const name = await link.innerText().catch(() => `item_${i}`);
-        console.log(`  [${i + 1}/${count}] ${name}`);
+        // 로그를 한 줄에 이름, 전체 시간, 각 단계별 시간 모두 출력
+        const itemLogPrefix = `[페이지 ${pageNum}] [${i + 1}/${count}]`;
+        let itemTotalTime = 0;
         
         // 전체 아이템 처리에 타임아웃 적용 (30초)
         const ITEM_TIMEOUT = 30000;
@@ -187,7 +190,7 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
             await page.waitForTimeout(300);
             descText = await entryFrame.locator('div.RoqbX').first().textContent({ timeout: 10000 }).catch(() => '');
           } catch (error) {
-            console.log(`    [WARN] 주소/설명 수집 실패: ${error.message}`);
+            logger.warn(`    [WARN] 주소/설명 수집 실패: ${error.message}`);
           }
           const time5 = Date.now() - t5;
           
@@ -231,7 +234,6 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
         let itemData = null;
         try {
           itemData = await Promise.race([itemProcessingPromise, timeoutPromise]);
-          
           pageData.push({
             name,
             address: itemData.address,
@@ -240,24 +242,23 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
             description: itemData.description,
             images: itemData.images
           });
-          
+
           consecutiveFailures = 0; // 성공 시 카운터 리셋
-          
-          const totalTime = Date.now() - itemStartTime;
-          console.log(`    시간: 기간=${itemData.time1}ms | 이미지=${itemData.time2}ms (${itemData.images.length}개) | 클릭=${itemData.time3}ms | iframe=${itemData.time4}ms | 주소/설명=${itemData.time5}ms | 총=${totalTime}ms`);
+          itemTotalTime = Date.now() - itemStartTime;
+          logger.log(`${itemLogPrefix} ${name} | 총:${itemTotalTime}ms | 기간:${itemData.time1}ms | 이미지:${itemData.time2}ms | 클릭:${itemData.time3}ms | iframe:${itemData.time4}ms | 주소/설명:${itemData.time5}ms`);
         } catch (error) {
           consecutiveFailures++; // 실패 시 카운터 증가
           
           const totalTime = Date.now() - itemStartTime;
           if (error.message === 'TIMEOUT') {
-            console.log(`    [SKIP] 타임아웃 (${ITEM_TIMEOUT / 1000}초 초과) - 다음 항목으로 이동 (연속실패: ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}) (총=${totalTime}ms)`);
+            logger.warn(`    [SKIP] 타임아웃 (${ITEM_TIMEOUT / 1000}초 초과) - 다음 항목으로 이동 (연속실패: ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}) (총=${totalTime}ms)`);
           } else {
-            console.log(`    [SKIP] 오류 발생: ${error.message} (연속실패: ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}) (총=${totalTime}ms)`);
+            logger.warn(`    [SKIP] 오류 발생: ${error.message} (연속실패: ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}) (총=${totalTime}ms)`);
             
             // 브라우저 닫힘 관련 에러면 즉시 중단
             if (error.message.includes('closed') || error.message.includes('Target page')) {
               browserClosed = true;
-              console.log(`\n[ERROR] 브라우저 연결이 끊어졌습니다. 크롤링을 중단합니다.`);
+              logger.error(`\n[ERROR] 브라우저 연결이 끊어졌습니다. 크롤링을 중단합니다.`);
               break;
             }
           }
@@ -268,7 +269,7 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
 
       // 페이지 데이터 처리 (콜백 호출)
       if (pageData.length > 0 && onPageComplete) {
-        console.log(`\n[SAVE] 페이지 ${pageNum} 데이터 저장 중... (${pageData.length}개)`);
+        logger.log(`\n[SAVE] 페이지 ${pageNum} 데이터 저장 중... (${pageData.length}개)`);
         await onPageComplete(pageData);
         totalCount += pageData.length;
       }
@@ -277,17 +278,17 @@ async function crawlNaverMapPopups(searchKeyword, onPageComplete) {
       const nextButton = iframe.getByRole('button', { name: '다음페이지' });
       
       if (await nextButton.count() === 0 || await nextButton.getAttribute('aria-disabled') === 'true') {
-        console.log('  마지막 페이지 도달');
+        logger.log('  마지막 페이지 도달');
         break;
       }
       
-      console.log('  다음 페이지로 이동...');
+      logger.log('  다음 페이지로 이동...');
       await nextButton.click();
       await iframe.locator('li.guugO').first().waitFor({ timeout: 10000 }).catch(() => {});
       pageNum++;
     }
 
-    console.log(`\n[OK] 크롤링 완료: 총 ${totalCount}개 (페이지: ${pageNum}개)`);
+    logger.log(`\n[OK] 크롤링 완료: 총 ${totalCount}개 (페이지: ${pageNum}개)`);
     return { totalCount, pageCount: pageNum };
   } finally {
     await browser.close();

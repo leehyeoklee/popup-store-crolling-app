@@ -1,6 +1,33 @@
 const { getPool } = require('./connection');
+const fs = require('fs');
+const path = require('path');
+
+// 로그 파일 경로 생성 함수
+function getLogFilePath(keyword) {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${yyyy}${mm}${dd}`;
+  const safeKeyword = (keyword || 'log').replace(/[^\w가-힣]/g, '_');
+  const logsDir = path.join(__dirname, '../../logs');
+  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+  return path.join(logsDir, `${dateStr}_${safeKeyword}.log`);
+}
+
+// 로그 기록 함수 (콘솔+파일)
+function logToFile(msg, keyword) {
+  console.log(msg);
+  const filePath = getLogFilePath(keyword);
+  fs.appendFileSync(filePath, msg + '\n');
+}
+
+const Logger = require('../utils/Logger');
 
 class PopupStoreRepository {
+  constructor(logger) {
+    this.logger = logger || new Logger();
+  }
   // 카테고리 이름으로 ID 조회 (캐싱)
   async getCategoryId(categoryName) {
     if (!this.categoryCache) {
@@ -20,15 +47,18 @@ class PopupStoreRepository {
 
 
   // 크롤링 직후 중복 체크 (새 데이터만 필터링)
+
   async filterNewData(popupDataArray) {
     if (popupDataArray.length === 0) {
       return [];
     }
-    
+
+    // 환경변수에서 키워드 추출 (없으면 'log')
+    const keyword = process.env.SEARCH_KEYWORD || 'log';
 
     const { getPopupHash } = require('../utils/popupStoreHash');
     const connection = await getPool().getConnection();
-    
+
     try {
       // DB에서 현재 저장된 모든 팝업의 (name, hash) 조회
       const [existing] = await connection.query(
@@ -43,14 +73,18 @@ class PopupStoreRepository {
       const newData = popupDataArray.filter(data => {
         const hash = getPopupHash(data);
         const exists = existingSet.has(`${data.name}|${hash}`);
-        // 해시값 앞 4자리 비교 로그
+        // 신규 데이터만 로그 파일+콘솔 출력 (hash 비교만 파일 로그)
         if (!exists) {
-          console.log(`[HASH COMPARE] name: ${data.name}, hash: ${hash.slice(0,4)} (신규)`);
-        } else {
           // 기존 해시값 찾기
           const matched = Array.from(existingSet).find(v => v.startsWith(`${data.name}|`));
           const oldHash = matched ? matched.split('|')[1] : '';
-          console.log(`[HASH COMPARE] name: ${data.name}, old: ${oldHash.slice(0,4)}, new: ${hash.slice(0,4)} (중복)`);
+          if (oldHash) {
+            // 기존 name은 있는데 해시가 다르면 업데이트
+            logToFile(`[HASH COMPARE] name: ${data.name}, old: ${oldHash.slice(0,4)}, new: ${hash.slice(0,4)} (업데이트)`, keyword);
+          } else {
+            // 완전 신규
+            logToFile(`[HASH COMPARE] name: ${data.name} (신규)`, keyword);
+          }
         }
         return !exists;
       });
@@ -66,7 +100,6 @@ class PopupStoreRepository {
     if (popupDataArray.length === 0) {
       return { savedCount: 0, savedIds: [] };
     }
-    
     const savedIds = await this.batchInsertPopupStores(popupDataArray);
     return { savedCount: popupDataArray.length, savedIds };
   }
@@ -136,7 +169,6 @@ class PopupStoreRepository {
       await this.getCategoryId('fashion'); // 캐시 로딩
       for (let i = 0; i < popupDataArray.length; i++) {
         const popupId = savedIds[i];
-        // ...existing code...
         const images = popupDataArray[i].images || [];
         for (const imageUrl of images) {
           allImageValues.push([popupId, imageUrl]);
@@ -169,12 +201,12 @@ class PopupStoreRepository {
       }
       
       await connection.commit();
-      console.log(`[OK] 배치 저장 완료: ${popupDataArray.length}개 (이미지: ${allImageValues.length}개, 카테고리: ${allCategoryValues.length}개)`);
+      this.logger.log(`[OK] 배치 저장 완료: ${popupDataArray.length}개 (이미지: ${allImageValues.length}개, 카테고리: ${allCategoryValues.length}개)`);
       return savedIds;
       
     } catch (error) {
       await connection.rollback();
-      console.error('[ERROR] 배치 저장 실패:', error.message);
+      this.logger.error('[ERROR] 배치 저장 실패:', error.message);
       throw error;
     } finally {
       connection.release();
@@ -182,4 +214,4 @@ class PopupStoreRepository {
   }
 }
 
-module.exports = new PopupStoreRepository();
+module.exports = PopupStoreRepository;
