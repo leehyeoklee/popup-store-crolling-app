@@ -150,8 +150,17 @@ AI 기반 카테고리 분류 및 좌표 보정을 거쳐 **정제된 데이터 
 * 다건 데이터를 묶는 Batch 요청으로 비용 절감
 * API 장애 시 `etc` 카테고리로 안전 저장
 
+### 🗄️ 3.5 데이터베이스 저장
+분류된 결과는 정규화된 DB 구조에 따라 저장됩니다.
 
-### 📊 3.5 상세 로깅 시스템
+#### ERD
+<img width="840" height="948" alt="Image" src="https://github.com/user-attachments/assets/bcb34e9f-c9f3-41fb-9b1d-d6bf828267dd" />
+
+* **저장 로직**:
+  1. AI가 반환한 카테고리 이름(`name`)으로 `categories` 테이블 조회 (`id` 획득)
+  2. `popup_stores`의 `id`와 카테고리 `id`를 매핑하여 `popup_categories` 테이블에 `INSERT`
+
+### 📊 3.6 상세 로깅 시스템
 
 모든 실행 과정은 파일 단위로 기록됩니다.
 
