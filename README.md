@@ -245,7 +245,6 @@ SET GLOBAL event_scheduler = ON;
 DELIMITER $$
 
 -- 2. 주간 조회수 초기화 이벤트
--- (혹시 이미 존재하면 에러 날 수 있으므로 DROP 추가)
 DROP EVENT IF EXISTS reset_weekly_view_count$$
 
 CREATE EVENT reset_weekly_view_count
