@@ -2,8 +2,6 @@ const crawlNaverMapPopups = require('../crawlers/popupCrawler');
 const Logger = require('../utils/Logger');
 const NaverApiClient = require('../utils/naverApi');
 const CategoryClassifier = require('../utils/categoryClassifier');
-// const popupStoreRepository = require('../database/repository'); // Removed direct require
-
 /**
  * 팝업 스토어 서비스 - 데이터 수집 + API 조회 + DB 저장 통합
  */

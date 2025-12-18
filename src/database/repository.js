@@ -15,13 +15,6 @@ function getLogFilePath(keyword) {
   return path.join(logsDir, `${dateStr}_${safeKeyword}.log`);
 }
 
-// 로그 기록 함수 (콘솔+파일)
-function logToFile(msg, keyword) {
-  console.log(msg);
-  const filePath = getLogFilePath(keyword);
-  fs.appendFileSync(filePath, msg + '\n');
-}
-
 const Logger = require('../utils/Logger');
 
 class PopupStoreRepository {
@@ -53,9 +46,6 @@ class PopupStoreRepository {
       return [];
     }
 
-    // 환경변수에서 키워드 추출 (없으면 'log')
-    const keyword = process.env.SEARCH_KEYWORD || 'log';
-
     const { getPopupHash } = require('../utils/popupStoreHash');
     const connection = await getPool().getConnection();
 
@@ -80,10 +70,10 @@ class PopupStoreRepository {
           const oldHash = matched ? matched.split('|')[1] : '';
           if (oldHash) {
             // 기존 name은 있는데 해시가 다르면 업데이트
-            logToFile(`[HASH COMPARE] name: ${data.name}, old: ${oldHash.slice(0,4)}, new: ${hash.slice(0,4)} (업데이트)`, keyword);
+            this.logger.log(`[HASH COMPARE] name: ${data.name}, old: ${oldHash.slice(0,4)}, new: ${hash.slice(0,4)} (업데이트)`);
           } else {
             // 완전 신규
-            logToFile(`[HASH COMPARE] name: ${data.name} (신규)`, keyword);
+            this.logger.log(`[HASH COMPARE] name: ${data.name} (신규)`);
           }
         }
         return !exists;
