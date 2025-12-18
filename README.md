@@ -343,6 +343,8 @@ await link.click({ timeout: 10000 });
 네트워크가 느린 환경에서는 타임아웃 값 조절 가능 
 
 ---
-## 🔟 데모 (Demo)
+## 🔟 데모 시연 영상 (Demo Video)
+
+아래 이미지를 클릭하면 유튜브 영상으로 이동합니다.
 
 [![PopFitUp Demo](https://img.youtube.com/vi/cRrZcI5YlVA/0.jpg)](https://youtu.be/cRrZcI5YlVA)
