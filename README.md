@@ -239,18 +239,26 @@ SEARCH_KEYWORD=
 아래 SQL은 **조회수 초기화**와 **즐겨찾기 수 자동 관리**를 위한 설정입니다.
 
 ```sql
+-- 1. 이벤트 스케줄러 켜기
 SET GLOBAL event_scheduler = ON;
-
--- A. 주간 조회수 초기화 이벤트
-CREATE EVENT IF NOT EXISTS reset_weekly_view_count
-ON SCHEDULE EVERY 1 WEEK
-STARTS CURRENT_TIMESTAMP
-DO
-  UPDATE popup_stores SET weekly_view_count = 0;
 
 DELIMITER $$
 
--- B. 즐겨찾기 추가 시 카운트 증가
+-- 2. 주간 조회수 초기화 이벤트
+-- (혹시 이미 존재하면 에러 날 수 있으므로 DROP 추가)
+DROP EVENT IF EXISTS reset_weekly_view_count$$
+
+CREATE EVENT reset_weekly_view_count
+ON SCHEDULE EVERY 1 WEEK
+STARTS CURRENT_TIMESTAMP
+DO
+BEGIN
+    UPDATE popup_stores SET weekly_view_count = 0;
+END$$
+
+-- 3. 즐겨찾기 추가 시 카운트 증가 트리거
+DROP TRIGGER IF EXISTS favorites_after_insert$$
+
 CREATE TRIGGER favorites_after_insert
 AFTER INSERT ON favorites
 FOR EACH ROW
@@ -262,7 +270,9 @@ BEGIN
     WHERE id = NEW.popup_id;
 END$$
 
--- C. 즐겨찾기 삭제 시 카운트 감소
+-- 4. 즐겨찾기 삭제 시 카운트 감소 트리거
+DROP TRIGGER IF EXISTS favorites_after_delete$$
+
 CREATE TRIGGER favorites_after_delete
 AFTER DELETE ON favorites
 FOR EACH ROW
