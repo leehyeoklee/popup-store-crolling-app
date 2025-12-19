@@ -6,6 +6,19 @@
 
 </div>
 
+### 👥 팀원 (Contributors)
+
+| 학번 | 이름 | 역할 |
+| :---: | :---: | :--- |
+| **21101217** | **이혁** (팀장) | Backend |
+| **21101224** | **정경재** | Frontend |
+
+### 🚀 서비스 배포 현황 (Deployment Status)
+
+| 서비스명 | URL | 상태 |
+| :--- | :--- | :--- |
+| **PopFitUp Web** | **[https://popfitup.store](https://popfitup.store)** | ![Status](https://img.shields.io/badge/Status-Online-success) |---
+
 ---
 
 ## 📌 목차 (Table of Contents)
